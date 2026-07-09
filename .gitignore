@@ -1,3 +1,10 @@
 node_modules/
 .env
 logs/
+public/audio/
+
+# Never commit Google service-account keys
+*service-account*.json
+*-key.json
+credentials*.json
+gcp-*.json
