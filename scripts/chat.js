@@ -4,16 +4,13 @@
 require('dotenv').config();
 const readline = require('readline');
 const { getAgentReply } = require('../src/agent');
-
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('Set ANTHROPIC_API_KEY in .env first (copy .env.example to .env).');
-  process.exit(1);
-}
+const { providerName, model } = require('../src/llm');
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const history = [];
 
-console.log(`AI receptionist chat test. Type like a caller. Ctrl+C to quit.\n`);
+console.log(`AI receptionist chat test  [provider: ${providerName}, model: ${model}]`);
+console.log(`Type like a caller. Ctrl+C to quit.\n`);
 console.log('Agent: Thanks for calling! How can I help you today?');
 
 rl.setPrompt('You: ');

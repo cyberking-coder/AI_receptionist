@@ -1,8 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const Anthropic = require('@anthropic-ai/sdk');
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const { callLLM } = require('./llm');
 
 const KB_PATH = path.join(__dirname, '..', 'knowledge-base', 'business.md');
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'the business';
@@ -15,12 +13,13 @@ function loadKnowledgeBase() {
   }
 }
 
-// Claude must always call this tool. Its arguments are the single source of
-// truth for what gets spoken and how the call proceeds next.
+// The model is forced to call this tool every turn. Its arguments are the
+// single source of truth for what gets spoken and how the call proceeds.
+// (JSON Schema here works for both OpenAI-style and Anthropic providers.)
 const RESPOND_TOOL = {
   name: 'respond_to_caller',
-  description: "Decide what to say next to the phone caller and how to route the call.",
-  input_schema: {
+  description: 'Decide what to say next to the phone caller and how to route the call.',
+  parameters: {
     type: 'object',
     properties: {
       speech: {
@@ -67,27 +66,25 @@ ${kb}`;
 async function getAgentReply(history, callerMessage) {
   const messages = [...history, { role: 'user', content: callerMessage }];
 
-  const response = await anthropic.messages.create({
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
-    max_tokens: 400,
-    system: buildSystemPrompt(),
-    tools: [RESPOND_TOOL],
-    tool_choice: { type: 'tool', name: 'respond_to_caller' },
-    messages
-  });
-
-  const toolUse = response.content.find((block) => block.type === 'tool_use');
-  if (!toolUse) {
+  let input;
+  try {
+    input = await callLLM({ system: buildSystemPrompt(), messages, tool: RESPOND_TOOL });
+  } catch (err) {
+    console.error('LLM error:', err.message);
     return { speech: "Sorry, could you say that again?", action: 'continue', lead: null };
   }
 
-  const { speech, action, lead_name, lead_phone, lead_reason } = toolUse.input;
+  const { speech, action, lead_name, lead_phone, lead_reason } = input || {};
   const lead =
     action === 'capture_lead' && lead_phone
       ? { name: lead_name || null, phone: lead_phone, reason: lead_reason || null }
       : null;
 
-  return { speech, action: lead ? action : action === 'capture_lead' ? 'continue' : action, lead };
+  // If the model claimed capture_lead without a phone number, keep talking
+  // instead of falsely logging a lead.
+  const resolvedAction = action === 'capture_lead' && !lead ? 'continue' : action || 'continue';
+
+  return { speech: speech || "Sorry, could you say that again?", action: resolvedAction, lead };
 }
 
 module.exports = { getAgentReply, buildSystemPrompt };

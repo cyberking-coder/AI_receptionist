@@ -11,15 +11,15 @@ go-to-market/sales strategy.
 
 Twilio answers the phone and handles speech-to-text and text-to-speech
 (via `<Gather input="speech">` / `<Say>`). Each time the caller speaks,
-their transcribed text is sent to Claude, which is forced (via tool
-calling) to return a structured decision every turn: what to say next,
-and whether to keep listening, transfer to a human, capture a lead
-(name/phone/reason), or end the call. Claude answers strictly from
-`knowledge-base/business.md` — it's instructed not to invent hours,
-prices, or policies.
+their transcribed text is sent to an LLM (Groq by default, swappable),
+which is forced via tool calling to return a structured decision every
+turn: what to say next, and whether to keep listening, transfer to a
+human, capture a lead (name/phone/reason), or end the call. The model
+answers strictly from `knowledge-base/business.md` — it's instructed not
+to invent hours, prices, or policies.
 
 ```
-caller speech --Twilio STT--> text --> Claude (+ knowledge base, tool call)
+caller speech --Twilio STT--> text --> LLM (+ knowledge base, tool call)
                                           |
                                           v
                         { speech, action, lead? }
@@ -29,6 +29,18 @@ caller speech --Twilio STT--> text --> Claude (+ knowledge base, tool call)
                                           v
                         Twilio TTS speaks `speech` back
 ```
+
+## Cost: this runs free
+
+- **LLM**: defaults to **Groq**, which has a genuinely free API tier — get
+  a key at [console.groq.com/keys](https://console.groq.com/keys) (no card,
+  no install). The provider is swappable via `LLM_PROVIDER`: `groq`
+  (default), `anthropic` (Claude), `ollama` (100% local, no key), or
+  `openai`.
+- **Phone**: Twilio is **pay-as-you-go with a free trial** (~$15 credit +
+  a free trial number) — enough to make real test calls. You don't need
+  it at all to try the agent: `npm run chat` runs the full brain in your
+  terminal for free.
 
 ## Setup
 
@@ -41,8 +53,9 @@ caller speech --Twilio STT--> text --> Claude (+ knowledge base, tool call)
    ```
    cp .env.example .env
    ```
-   Fill in `ANTHROPIC_API_KEY` (from console.anthropic.com) and, once
-   you're ready to take real calls, your Twilio credentials.
+   Set `LLM_PROVIDER` (default `groq`) and paste the matching free key —
+   e.g. `GROQ_API_KEY`. Twilio credentials are only needed later for real
+   phone calls.
 
 3. **Customize the knowledge base**
 
