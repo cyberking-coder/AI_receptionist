@@ -96,16 +96,45 @@ JSON line to `logs/leads.jsonl` (name, phone, reason, call SID, caller
 number, timestamp). For production, replace `src/leads.js` with a call
 to your CRM or a notification (email/Slack) instead of a local file.
 
+## Natural voice (ElevenLabs)
+
+By default the agent speaks with Twilio's built-in Polly voice (zero extra
+setup). For a far more natural voice, use ElevenLabs (free tier):
+
+1. Get a key at [elevenlabs.io](https://elevenlabs.io) → Profile → API Keys.
+2. In `.env` set `TTS_PROVIDER=elevenlabs`, `ELEVENLABS_API_KEY=...`, and
+   `PUBLIC_BASE_URL` to this server's public URL (your ngrok https URL).
+3. Optionally pick a different `ELEVENLABS_VOICE_ID`.
+
+How it works: each spoken line is synthesized to an MP3, cached under
+`public/audio/`, and served so Twilio can `<Play>` it. Repeated lines
+(like the greeting) are cached by content hash to save credits, and if
+ElevenLabs is unreachable the agent automatically falls back to Twilio's
+voice so a call never fails on TTS.
+
+## Appointment booking
+
+When a caller asks for an appointment, the agent collects their name,
+phone, and preferred time, then books it:
+
+- **Out of the box (no setup):** the request is recorded to
+  `logs/bookings.jsonl` for a human to confirm.
+- **With Google Calendar:** set `GOOGLE_SERVICE_ACCOUNT_JSON` (path to, or
+  inline JSON of, a service-account key with the Calendar API enabled) and
+  `GOOGLE_CALENDAR_ID`, then share that calendar with the service
+  account's email. A real event is created on the caller's requested time
+  (`APPOINTMENT_TIMEZONE` / `APPOINTMENT_DURATION_MIN` control zone and
+  length). If event creation fails, it falls back to logging.
+
+The agent is told today's date so it can resolve "tomorrow at 3pm" into a
+concrete ISO time, and it respects the business hours in your knowledge
+base.
+
 ## Notes on this MVP
 
 - Conversation state is in-memory (`src/session.js`), keyed by Twilio's
   `CallSid`. Fine for a single server process; use Redis or similar if
   you scale to multiple instances.
-- Voice quality uses Twilio's built-in Polly voices — good enough for an
-  MVP with zero extra accounts. For a more natural voice, swap in a
-  streaming TTS provider (ElevenLabs, Cartesia) — see `docs/strategy.md`
-  for the fuller architecture with dedicated STT/TTS providers and
-  lower latency via Twilio Media Streams.
-- No calendar integration yet — bookings are captured as leads for a
-  human to confirm. Add a Calendly/Google Calendar API call in
-  `src/leads.js` (or a new `capture_lead` handler) when you're ready.
+- Booking here confirms the caller's requested time without real-time
+  double-booking checks. For a production system, add an availability
+  lookup (Calendar free/busy or Cal.com) before confirming.

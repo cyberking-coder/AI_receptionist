@@ -5,6 +5,8 @@ require('dotenv').config();
 const readline = require('readline');
 const { getAgentReply } = require('../src/agent');
 const { providerName, model } = require('../src/llm');
+const { saveLead } = require('../src/leads');
+const { bookAppointment } = require('../src/booking');
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const history = [];
@@ -29,6 +31,18 @@ rl.on('line', async (line) => {
     if (result.action !== 'continue') {
       console.log(`  [action: ${result.action}${result.lead ? `, lead: ${JSON.stringify(result.lead)}` : ''}]`);
     }
+
+    // Exercise the same side effects a real call would, so you can see
+    // leads and bookings land without any phone/Twilio setup.
+    const callInfo = { callSid: 'chat-test', callerNumber: 'terminal' };
+    if (result.action === 'capture_lead' && result.lead) {
+      saveLead(result.lead, callInfo);
+      console.log('  [saved lead to logs/leads.jsonl]');
+    } else if (result.action === 'book_appointment' && result.lead) {
+      const r = await bookAppointment(result.lead, callInfo);
+      console.log(`  [booking ${r.status}${r.when ? ` for ${r.when}` : ''}${r.link ? ` -> ${r.link}` : ''}]`);
+    }
+
     if (result.action === 'transfer' || result.action === 'end_call') {
       rl.close();
       return;

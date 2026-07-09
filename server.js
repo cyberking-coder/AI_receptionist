@@ -1,22 +1,35 @@
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const twilio = require('twilio');
 
 const { getAgentReply } = require('./src/agent');
 const { getSession, endSession } = require('./src/session');
 const { saveLead } = require('./src/leads');
+const { bookAppointment } = require('./src/booking');
+const { synthesize, AUDIO_DIR } = require('./src/tts');
 
 const { VoiceResponse } = twilio.twiml;
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
+// Serve ElevenLabs-generated MP3s so Twilio can <Play> them.
+app.use('/audio', express.static(AUDIO_DIR));
 
 const VOICE = process.env.TTS_VOICE || 'Polly.Joanna-Neural';
 const BUSINESS_NAME = process.env.BUSINESS_NAME || 'our office';
 const HUMAN_TRANSFER_NUMBER = process.env.HUMAN_TRANSFER_NUMBER;
 const MAX_NO_INPUT_RETRIES = 2;
 
-function gather(twiml, promptText) {
+// Speak `text` on `node` (a <Response> or <Gather>): play an ElevenLabs clip
+// if TTS is enabled and synthesis succeeds, else use Twilio's built-in voice.
+async function voiceLine(node, text) {
+  const url = await synthesize(text);
+  if (url) node.play(url);
+  else node.say({ voice: VOICE }, text);
+}
+
+async function gather(twiml, promptText) {
   const g = twiml.gather({
     input: 'speech',
     action: '/handle-speech',
@@ -24,27 +37,27 @@ function gather(twiml, promptText) {
     speechTimeout: 'auto',
     speechModel: 'phone_call'
   });
-  g.say({ voice: VOICE }, promptText);
+  await voiceLine(g, promptText);
 }
 
-function transferOrEnd(twiml) {
+async function transferOrEnd(twiml) {
   if (HUMAN_TRANSFER_NUMBER) {
     twiml.dial(HUMAN_TRANSFER_NUMBER);
   } else {
-    twiml.say({ voice: VOICE }, "I'm sorry, no one is available to take your call right now. Goodbye.");
+    await voiceLine(twiml, "I'm sorry, no one is available to take your call right now. Goodbye.");
     twiml.hangup();
   }
 }
 
 // Twilio hits this when a call first comes in.
-app.post('/voice', (req, res) => {
+app.post('/voice', async (req, res) => {
   const session = getSession(req.body.CallSid);
   session.callerNumber = req.body.From;
 
   const twiml = new VoiceResponse();
-  gather(twiml, `Thanks for calling ${BUSINESS_NAME}. How can I help you today?`);
+  await gather(twiml, `Thanks for calling ${BUSINESS_NAME}. How can I help you today?`);
   // Only reached if Gather itself fails to redirect (belt and suspenders).
-  twiml.say({ voice: VOICE }, "Sorry, I didn't catch that. Goodbye.");
+  await voiceLine(twiml, "Sorry, I didn't catch that. Goodbye.");
   twiml.hangup();
   res.type('text/xml').send(twiml.toString());
 });
@@ -60,12 +73,12 @@ app.post('/handle-speech', async (req, res) => {
   if (!speechResult) {
     session.retries += 1;
     if (session.retries > MAX_NO_INPUT_RETRIES) {
-      twiml.say({ voice: VOICE }, "I'm having trouble hearing you.");
-      transferOrEnd(twiml);
+      await voiceLine(twiml, "I'm having trouble hearing you.");
+      await transferOrEnd(twiml);
       endSession(callSid);
       return res.type('text/xml').send(twiml.toString());
     }
-    gather(twiml, "Sorry, I didn't catch that. Could you say that again?");
+    await gather(twiml, "Sorry, I didn't catch that. Could you say that again?");
     return res.type('text/xml').send(twiml.toString());
   }
   session.retries = 0;
@@ -75,8 +88,8 @@ app.post('/handle-speech', async (req, res) => {
     result = await getAgentReply(session.history, speechResult);
   } catch (err) {
     console.error('Agent error:', err);
-    twiml.say({ voice: VOICE }, "Sorry, I'm having a technical issue. Let me transfer you.");
-    transferOrEnd(twiml);
+    await voiceLine(twiml, "Sorry, I'm having a technical issue. Let me transfer you.");
+    await transferOrEnd(twiml);
     endSession(callSid);
     return res.type('text/xml').send(twiml.toString());
   }
@@ -84,25 +97,35 @@ app.post('/handle-speech', async (req, res) => {
   session.history.push({ role: 'user', content: speechResult });
   session.history.push({ role: 'assistant', content: result.speech });
 
+  const callInfo = { callSid, callerNumber: session.callerNumber };
   if (result.action === 'capture_lead' && result.lead) {
-    saveLead(result.lead, { callSid, callerNumber: session.callerNumber });
+    saveLead(result.lead, callInfo);
+  } else if (result.action === 'book_appointment' && result.lead) {
+    // Fire the booking; don't block the caller on calendar latency beyond
+    // what's needed. (await keeps ordering simple for this MVP.)
+    try {
+      await bookAppointment(result.lead, callInfo);
+    } catch (err) {
+      console.error('Booking error:', err.message);
+    }
   }
 
   switch (result.action) {
     case 'transfer':
-      twiml.say({ voice: VOICE }, result.speech);
-      transferOrEnd(twiml);
+      await voiceLine(twiml, result.speech);
+      await transferOrEnd(twiml);
       endSession(callSid);
       break;
     case 'end_call':
-      twiml.say({ voice: VOICE }, result.speech);
+      await voiceLine(twiml, result.speech);
       twiml.hangup();
       endSession(callSid);
       break;
     case 'capture_lead':
+    case 'book_appointment':
     case 'continue':
     default:
-      gather(twiml, result.speech);
+      await gather(twiml, result.speech);
       break;
   }
 
