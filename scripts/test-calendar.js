@@ -23,7 +23,8 @@ async function main() {
       : JSON.parse(GOOGLE_SERVICE_ACCOUNT_JSON);
   } catch (err) {
     console.error('Could not read/parse GOOGLE_SERVICE_ACCOUNT_JSON:', err.message);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   console.log('✓ Credentials loaded for:', credentials.client_email);
 
@@ -51,7 +52,8 @@ async function main() {
   } catch (err) {
     console.error('✗ Could not read the calendar:', err.message);
     console.error('  Check the calendar is shared with the service account email (Part B step 4).');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   // Optional write test
@@ -73,7 +75,8 @@ async function main() {
     } catch (err) {
       console.error('✗ Could not create an event:', err.message);
       console.error('  The share permission must be "Make changes to events".');
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
   }
 
@@ -82,5 +85,5 @@ async function main() {
 
 main().catch((err) => {
   console.error('Unexpected error:', err.message);
-  process.exit(1);
+  process.exitCode = 1;
 });

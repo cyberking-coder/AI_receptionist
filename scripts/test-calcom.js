@@ -37,13 +37,17 @@ async function main() {
     const text = await res.text();
     if (!res.ok) {
       console.error(`✗ Slots request failed (${res.status}): ${text}`);
-      console.error('  Check CALCOM_API_KEY and CALCOM_EVENT_TYPE_ID (see CALCOM_SETUP.md).');
-      process.exit(1);
+      console.error('  Check CALCOM_API_KEY, CALCOM_EVENT_TYPE_ID, and that');
+      console.error('  APPOINTMENT_TIMEZONE is a valid IANA zone (e.g. Asia/Kolkata,');
+      console.error('  America/New_York). See CALCOM_SETUP.md.');
+      process.exitCode = 1;
+      return;
     }
     json = JSON.parse(text);
   } catch (err) {
     console.error('✗ Could not reach Cal.com:', err.message);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   // Flatten whatever shape came back into a count + first slot.
@@ -63,7 +67,8 @@ async function main() {
   if (process.argv.includes('--book')) {
     if (!firstSlot) {
       console.error('✗ No slot to book. Add availability to the event type and retry.');
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
     try {
       const outcome = await bookViaCalcom({
@@ -76,7 +81,8 @@ async function main() {
       console.log('  (Open Cal.com and cancel it if you like.)');
     } catch (err) {
       console.error('✗ Booking failed:', err.message);
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
   }
 
@@ -85,5 +91,5 @@ async function main() {
 
 main().catch((err) => {
   console.error('Unexpected error:', err.message);
-  process.exit(1);
+  process.exitCode = 1;
 });
