@@ -40,7 +40,8 @@ rl.on('line', async (line) => {
       console.log('  [saved lead to logs/leads.jsonl]');
     } else if (result.action === 'book_appointment' && result.lead) {
       const r = await bookAppointment(result.lead, callInfo);
-      console.log(`  [booking ${r.status}${r.when ? ` for ${r.when}` : ''}${r.link ? ` -> ${r.link}` : ''}]`);
+      const alts = r.alternatives && r.alternatives.length ? ` alternatives: ${r.alternatives.join(', ')}` : '';
+      console.log(`  [booking ${r.status}${r.when ? ` for ${r.when}` : ''}${r.link ? ` -> ${r.link}` : ''}${alts}]`);
     }
 
     if (result.action === 'transfer' || result.action === 'end_call') {

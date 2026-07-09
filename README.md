@@ -122,13 +122,31 @@ phone, and preferred time, then books it:
 - **With Google Calendar:** set `GOOGLE_SERVICE_ACCOUNT_JSON` (path to, or
   inline JSON of, a service-account key with the Calendar API enabled) and
   `GOOGLE_CALENDAR_ID`, then share that calendar with the service
-  account's email. A real event is created on the caller's requested time
-  (`APPOINTMENT_TIMEZONE` / `APPOINTMENT_DURATION_MIN` control zone and
-  length). If event creation fails, it falls back to logging.
+  account's email. Now the agent **checks availability** (Calendar
+  free/busy) before booking:
+  - If the slot is free, it creates the event and confirms.
+  - If it's taken, it offers the next open slots ("that's booked — I have
+    3:30 or 4:30, would either work?") and books whichever the caller
+    picks.
+  `APPOINTMENT_TIMEZONE`, `APPOINTMENT_DURATION_MIN`, and
+  `SUGGEST_WINDOW_HOURS` control the zone, slot length, and how far ahead
+  it looks for alternatives. If a calendar call fails, it falls back to
+  logging.
 
 The agent is told today's date so it can resolve "tomorrow at 3pm" into a
 concrete ISO time, and it respects the business hours in your knowledge
 base.
+
+## SMS confirmation
+
+After a booking, the caller gets a text confirmation (via Twilio) — "Your
+appointment is confirmed for Friday, July 10 at 3:00 PM." It's sent to the
+number the caller provided, or their caller ID as a fallback. This reuses
+your Twilio credentials; no extra setup. If Twilio isn't configured, the
+call flow continues normally and the SMS is simply skipped.
+
+> On a Twilio **trial** account you can only text numbers you've verified
+> in the console — upgrade to text arbitrary callers.
 
 ## Notes on this MVP
 

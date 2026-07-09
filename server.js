@@ -7,7 +7,9 @@ const { getAgentReply } = require('./src/agent');
 const { getSession, endSession } = require('./src/session');
 const { saveLead } = require('./src/leads');
 const { bookAppointment } = require('./src/booking');
+const { sendSms } = require('./src/sms');
 const { synthesize, AUDIO_DIR } = require('./src/tts');
+const { formatTime, formatDateTime } = require('./src/datetime');
 
 const { VoiceResponse } = twilio.twiml;
 
@@ -95,42 +97,106 @@ app.post('/handle-speech', async (req, res) => {
   }
 
   session.history.push({ role: 'user', content: speechResult });
-  session.history.push({ role: 'assistant', content: result.speech });
 
   const callInfo = { callSid, callerNumber: session.callerNumber };
-  if (result.action === 'capture_lead' && result.lead) {
+  let speech = result.speech;
+  let action = result.action;
+
+  if (action === 'capture_lead' && result.lead) {
     saveLead(result.lead, callInfo);
-  } else if (result.action === 'book_appointment' && result.lead) {
-    // Fire the booking; don't block the caller on calendar latency beyond
-    // what's needed. (await keeps ordering simple for this MVP.)
-    try {
-      await bookAppointment(result.lead, callInfo);
-    } catch (err) {
-      console.error('Booking error:', err.message);
-    }
+  } else if (action === 'book_appointment' && result.lead) {
+    // Booking may override what we say (e.g. the slot is taken) and always
+    // resolves to "continue" so the caller can respond.
+    const outcome = await handleBooking(result, session, callInfo);
+    speech = outcome.speech;
+    action = outcome.action;
   }
 
-  switch (result.action) {
+  // Record what we actually said (post-override) so the agent's next turn
+  // has accurate context.
+  session.history.push({ role: 'assistant', content: speech });
+
+  switch (action) {
     case 'transfer':
-      await voiceLine(twiml, result.speech);
+      await voiceLine(twiml, speech);
       await transferOrEnd(twiml);
       endSession(callSid);
       break;
     case 'end_call':
-      await voiceLine(twiml, result.speech);
+      await voiceLine(twiml, speech);
       twiml.hangup();
       endSession(callSid);
       break;
     case 'capture_lead':
-    case 'book_appointment':
     case 'continue':
     default:
-      await gather(twiml, result.speech);
+      await gather(twiml, speech);
       break;
   }
 
   res.type('text/xml').send(twiml.toString());
 });
+
+// Check availability, book (or suggest alternatives), and text a
+// confirmation. Returns the speech to say next and the follow-up action.
+async function handleBooking(result, session, callInfo) {
+  let outcome;
+  try {
+    outcome = await bookAppointment(result.lead, callInfo);
+  } catch (err) {
+    console.error('Booking error:', err.message);
+    return { speech: result.speech, action: 'continue' };
+  }
+
+  switch (outcome.status) {
+    case 'booked':
+      await sendConfirmationSms(
+        result.lead,
+        session,
+        `Your appointment is confirmed for ${formatDateTime(outcome.when)}.`
+      );
+      return { speech: result.speech, action: 'continue' }; // keep agent's confirmation
+
+    case 'logged':
+      await sendConfirmationSms(
+        result.lead,
+        session,
+        `We received your appointment request for ${formatDateTime(outcome.when)} and will confirm shortly.`
+      );
+      return { speech: result.speech, action: 'continue' };
+
+    case 'unavailable': {
+      const alts = outcome.alternatives || [];
+      if (alts.length === 0) {
+        return {
+          speech:
+            "I'm sorry, that time is already booked and I don't see any nearby openings. Would you like someone to call you back with more options?",
+          action: 'continue'
+        };
+      }
+      const list = alts.map(formatTime).join(' or ');
+      return {
+        speech: `I'm sorry, that time is already booked. The next openings I have are ${list}. Would either of those work?`,
+        action: 'continue'
+      };
+    }
+
+    case 'invalid_time':
+    default:
+      return {
+        speech: "Sorry, I didn't catch a valid time. What day and time would you like to come in?",
+        action: 'continue'
+      };
+  }
+}
+
+async function sendConfirmationSms(lead, session, body) {
+  const to = (lead && lead.phone) || session.callerNumber;
+  const res = await sendSms(to, `${BUSINESS_NAME}: ${body}`);
+  if (!res.sent && res.reason !== 'twilio-not-configured') {
+    console.warn('Confirmation SMS not sent:', res.reason);
+  }
+}
 
 // Optional: point Twilio's "status callback" here to clean up sessions
 // promptly when a call ends (hangup, no-answer, etc).
