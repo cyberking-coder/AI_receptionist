@@ -1,0 +1,36 @@
+# Render Blueprint. In the Render dashboard: New + -> Blueprint, connect this
+# repo, and it provisions the service below. Secrets (sync:false) are entered
+# in the dashboard, not committed here.
+services:
+  - type: web
+    name: ai-receptionist
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: LLM_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false
+      - key: BUSINESS_NAME
+        value: Acme Dental
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+      # Optional — leave unset to use Twilio's built-in voice:
+      - key: TTS_PROVIDER
+        value: twilio
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      # Optional — leave unset to log bookings instead of Google Calendar:
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: GOOGLE_CALENDAR_ID
+        sync: false
+      - key: APPOINTMENT_TIMEZONE
+        value: America/New_York

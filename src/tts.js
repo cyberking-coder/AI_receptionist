@@ -37,7 +37,8 @@ function cleanupOldFiles() {
 async function synthesize(text) {
   if (!ttsEnabled()) return null;
 
-  const baseUrl = process.env.PUBLIC_BASE_URL;
+  // On Render, RENDER_EXTERNAL_URL is set automatically to the public URL.
+  const baseUrl = process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL;
   if (!baseUrl) {
     console.warn('TTS: PUBLIC_BASE_URL not set — falling back to Twilio <Say>.');
     return null;
