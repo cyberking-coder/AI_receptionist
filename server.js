@@ -212,5 +212,20 @@ app.post('/call-status', (req, res) => {
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
+// Friendly landing page so visiting the base URL in a browser isn't confusing.
+// (Twilio uses POST /voice — that's the important one.)
+app.get('/', (req, res) => {
+  res.type('html').send(
+    `<!doctype html><meta charset="utf-8"><title>${BUSINESS_NAME} — AI Receptionist</title>` +
+      `<div style="font-family:system-ui;max-width:32rem;margin:4rem auto;padding:0 1rem;line-height:1.6">` +
+      `<h1>📞 AI Receptionist is running</h1>` +
+      `<p>This server answers phone calls for <b>${BUSINESS_NAME}</b>.</p>` +
+      `<p>Point your Twilio number's <i>"A call comes in"</i> webhook at ` +
+      `<code>POST /voice</code> on this domain, then call the number.</p>` +
+      `<p>Health check: <a href="/health">/health</a></p>` +
+      `</div>`
+  );
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`AI receptionist listening on port ${PORT}`));
