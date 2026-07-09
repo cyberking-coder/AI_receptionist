@@ -1,4 +1,7 @@
 require('dotenv').config();
+// Interpret naive datetimes (e.g. "2026-07-10T15:00:00" from the agent) in the
+// business timezone, not the server's. Must run before any Date is created.
+process.env.TZ = process.env.APPOINTMENT_TIMEZONE || process.env.TZ || 'America/New_York';
 const path = require('path');
 const express = require('express');
 const twilio = require('twilio');

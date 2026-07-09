@@ -7,6 +7,7 @@
 // logs/bookings.jsonl for a human to confirm.
 const fs = require('fs');
 const path = require('path');
+const { calcomConfigured, bookViaCalcom } = require('./calcom');
 
 const BOOKINGS_FILE = path.join(__dirname, '..', 'logs', 'bookings.jsonl');
 const DEFAULT_DURATION_MIN = parseInt(process.env.APPOINTMENT_DURATION_MIN || '30', 10);
@@ -112,6 +113,29 @@ async function bookAppointment(req, callInfo = {}) {
     ...callInfo,
     createdAt: new Date().toISOString()
   };
+
+  // Cal.com takes priority when configured.
+  if (calcomConfigured()) {
+    try {
+      const outcome = await bookViaCalcom({
+        name: req.name,
+        phone: req.phone,
+        reason: req.reason,
+        startISO
+      });
+      logBooking({
+        ...base,
+        status: outcome.status,
+        ...(outcome.link ? { link: outcome.link } : {}),
+        ...(outcome.alternatives ? { alternatives: outcome.alternatives } : {})
+      });
+      return outcome;
+    } catch (err) {
+      console.error('Cal.com booking failed, logging instead:', err.message);
+      logBooking({ ...base, status: 'logged', error: err.message });
+      return { status: 'logged', when: startISO };
+    }
+  }
 
   // No calendar wired up: can't check availability, so record for a human.
   if (!googleConfigured()) {

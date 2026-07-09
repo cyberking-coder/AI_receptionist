@@ -2,6 +2,7 @@
 // Twilio or phone number required. Useful for iterating on the knowledge
 // base and prompt before wiring up real calls.
 require('dotenv').config();
+process.env.TZ = process.env.APPOINTMENT_TIMEZONE || process.env.TZ || 'America/New_York';
 const readline = require('readline');
 const { getAgentReply } = require('../src/agent');
 const { providerName, model } = require('../src/llm');

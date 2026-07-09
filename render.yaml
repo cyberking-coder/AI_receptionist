@@ -27,7 +27,12 @@ services:
         value: twilio
       - key: ELEVENLABS_API_KEY
         sync: false
-      # Optional — leave unset to log bookings instead of Google Calendar:
+      # Optional booking — Cal.com (recommended). Leave unset to log bookings.
+      - key: CALCOM_API_KEY
+        sync: false
+      - key: CALCOM_EVENT_TYPE_ID
+        sync: false
+      # Optional booking — Google Calendar (alternative to Cal.com):
       - key: GOOGLE_SERVICE_ACCOUNT_JSON
         sync: false
       - key: GOOGLE_CALENDAR_ID

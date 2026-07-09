@@ -8,7 +8,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "chat": "node scripts/chat.js",
-    "test:calendar": "node scripts/test-calendar.js"
+    "test:calendar": "node scripts/test-calendar.js",
+    "test:calcom": "node scripts/test-calcom.js"
   },
   "engines": {
     "node": ">=18"

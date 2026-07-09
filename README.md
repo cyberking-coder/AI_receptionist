@@ -119,19 +119,23 @@ phone, and preferred time, then books it:
 
 - **Out of the box (no setup):** the request is recorded to
   `logs/bookings.jsonl` for a human to confirm.
-- **With Google Calendar:** set `GOOGLE_SERVICE_ACCOUNT_JSON` (path to, or
-  inline JSON of, a service-account key with the Calendar API enabled) and
-  `GOOGLE_CALENDAR_ID`, then share that calendar with the service
-  account's email. Now the agent **checks availability** (Calendar
-  free/busy) before booking:
-  - If the slot is free, it creates the event and confirms.
-  - If it's taken, it offers the next open slots ("that's booked — I have
-    3:30 or 4:30, would either work?") and books whichever the caller
-    picks.
-  `APPOINTMENT_TIMEZONE`, `APPOINTMENT_DURATION_MIN`, and
-  `SUGGEST_WINDOW_HOURS` control the zone, slot length, and how far ahead
-  it looks for alternatives. If a calendar call fails, it falls back to
-  logging.
+- **With Cal.com (recommended):** set `CALCOM_API_KEY` and
+  `CALCOM_EVENT_TYPE_ID` — simple API key, no Google Cloud. See
+  [CALCOM_SETUP.md](CALCOM_SETUP.md). Verify with `npm run test:calcom`.
+- **With Google Calendar (alternative):** set `GOOGLE_SERVICE_ACCOUNT_JSON`
+  and `GOOGLE_CALENDAR_ID`, then share the calendar with the service
+  account's email. See [GOOGLE_CALENDAR_SETUP.md](GOOGLE_CALENDAR_SETUP.md).
+  (Note: some Google orgs block service-account keys — if so, use Cal.com.)
+
+With either provider the agent **checks availability** before booking:
+
+- If the requested slot is free, it books it and confirms.
+- If it's taken, it offers the next open slots ("that's booked — I have
+  3:30 or 4:30, would either work?") and books whichever the caller picks.
+
+`APPOINTMENT_TIMEZONE`, `APPOINTMENT_DURATION_MIN`, and
+`SUGGEST_WINDOW_HOURS` control the zone, slot length, and how far ahead it
+looks for alternatives. If a provider call fails, it falls back to logging.
 
 The agent is told today's date so it can resolve "tomorrow at 3pm" into a
 concrete ISO time, and it respects the business hours in your knowledge
